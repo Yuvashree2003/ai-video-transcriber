@@ -1,5 +1,14 @@
 venv/
-*.wav
 __pycache__/
 *.pyc
-.env
+*.pyo
+*.pyd
+*.wav
+*.mp4
+*.m4a
+*.webm
+*.part
+*.tmp
+.DS_Store
+venv/
+temp.wav
