@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Transcriber</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Video Transcriber</h1>
+        <input type="text" id="url" placeholder="Paste Instagram, Facebook, or YouTube link">
+        <button onclick="transcribe()">Transcribe</button>
+        <textarea id="result" readonly></textarea>
+        <button onclick="copyText()">Copy to Clipboard</button>
+    </div>
+
+    <script>
+        function transcribe() {
+            const url = document.getElementById("url").value;
+            document.getElementById("result").textContent = "Processing...";
+            fetch("/transcribe", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({url})
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.transcript) {
+                    document.getElementById("result").textContent = data.transcript;
+                } else {
+                    document.getElementById("result").textContent = "Error: " + data.error;
+                }
+            });
+        }
+
+        function copyText() {
+            const text = document.getElementById("result").textContent;
+            navigator.clipboard.writeText(text);
+            alert("Copied to clipboard!");
+        }
+    </script>
+</body>
+</html>
