@@ -6,7 +6,7 @@ from flask import request, Response
 import os
 import yt_dlp
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static")
 
 # Load faster-whisper model (tiny for speed)
 model = WhisperModel("tiny", device="cpu", compute_type="int8")
@@ -67,16 +67,14 @@ def transcribe():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-    # Change these to your own secure username/password
+# Change these to your own secure username/password
 USERNAME = "Jayashree"
 PASSWORD = "Krishna@2025"
 
 def check_auth(username, password):
-    """Check if a username/password is correct."""
     return username == USERNAME and password == PASSWORD
 
 def authenticate():
-    """Send a 401 response that enables basic auth."""
     return Response(
         'Login required', 
         401,
@@ -85,12 +83,9 @@ def authenticate():
 
 @app.before_request
 def require_login():
-    """Require login for every request."""
     auth = request.authorization
     if not auth or not check_auth(auth.username, auth.password):
         return authenticate()
-    
-
 
 if __name__ == "__main__":
     app.run(debug=True)

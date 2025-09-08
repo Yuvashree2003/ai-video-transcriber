@@ -1,41 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Video Transcriber</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Video Transcriber</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>Video Transcriber</h1>
-        <input type="text" id="url" placeholder="Paste Instagram, Facebook, or YouTube link">
-        <button onclick="transcribe()">Transcribe</button>
-        <textarea id="result" readonly></textarea>
-        <button onclick="copyText()">Copy to Clipboard</button>
+    <div class="wrapper">
+        <div class="container">
+            <h1>🎧 AI Video Transcriber</h1>
+            <p class="subtitle">Paste a YouTube, Instagram, or Facebook video link below to get the transcript instantly.</p>
+            
+            <input type="text" id="urlInput" placeholder="Enter video URL..." />
+            <button onclick="transcribe()">Transcribe</button>
+
+            <div id="loading" class="loading hidden">⏳ Transcribing, please wait...</div>
+
+            <div class="output-box">
+                <div class="output-header">
+                    <h2>📝 Transcript</h2>
+                    <button id="copyBtn" onclick="copyTranscript()">📋 Copy</button>
+                </div>
+                <textarea id="output" readonly placeholder="Transcript will appear here..."></textarea>
+            </div>
+        </div>
     </div>
 
     <script>
-        function transcribe() {
-            const url = document.getElementById("url").value;
-            document.getElementById("result").textContent = "Processing...";
-            fetch("/transcribe", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({url})
-            })
-            .then(res => res.json())
-            .then(data => {
+        async function transcribe() {
+            const url = document.getElementById("urlInput").value;
+            const output = document.getElementById("output");
+            const loading = document.getElementById("loading");
+
+            if (!url) {
+                alert("Please enter a valid video URL.");
+                return;
+            }
+
+            output.value = "";
+            loading.classList.remove("hidden");
+
+            try {
+                const response = await fetch("/transcribe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url })
+                });
+
+                const data = await response.json();
                 if (data.transcript) {
-                    document.getElementById("result").textContent = data.transcript;
+                    output.value = data.transcript;
                 } else {
-                    document.getElementById("result").textContent = "Error: " + data.error;
+                    output.value = "❌ Error: " + (data.error || "Unknown error");
                 }
-            });
+            } catch (err) {
+                output.value = "⚠️ Failed to connect to server.";
+            } finally {
+                loading.classList.add("hidden");
+            }
         }
 
-        function copyText() {
-            const text = document.getElementById("result").textContent;
-            navigator.clipboard.writeText(text);
-            alert("Copied to clipboard!");
+        function copyTranscript() {
+            const output = document.getElementById("output");
+            if (output.value.trim() === "") {
+                alert("No transcript to copy!");
+                return;
+            }
+            output.select();
+            document.execCommand("copy");
+            alert("Transcript copied to clipboard! ✅");
         }
     </script>
 </body>
