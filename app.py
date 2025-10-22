@@ -62,69 +62,37 @@ def safe_remove_file(filepath, max_retries=3, delay=0.1):
             time.sleep(delay)
     return False
 
-def download_audio(url):
-    """Download best audio from a given URL using yt-dlp"""
-    unique_id = get_random_string()
-    temp_file = os.path.join(TEMP_DIR, f'temp_{unique_id}.%(ext)s')
+def download_audio(url, cookies_path=None):
+    import yt_dlp
+    import uuid
+
+    temp_file = f"temp_audio_{uuid.uuid4()}.mp3"
 
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': temp_file,
-        'quiet': False,
-        'no_warnings': False,
-        'ignoreerrors': False,
-        'noplaylist': True,
-        'extract_flat': False,
-        'retries': 5,
-        'fragment_retries': 5,
-        'nocheckcertificate': True,
-        'geo_bypass': True,  # ✅ bypass region lock
-        'socket_timeout': 15,
+        'quiet': True,
+        'no_warnings': True,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'wav',
+            'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
-        'http_headers': {
-            'User-Agent': (
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                'AppleWebKit/537.36 (KHTML, like Gecko) '
-                'Chrome/120.0.0.0 Safari/537.36'
-            ),
-            'Accept-Language': 'en-US,en;q=0.9',
-        },
-        'extractor_args': {
-            'youtube': {'player_skip': ['configs', 'webpage']}  # ✅ skip buggy YouTube configs
-        },
     }
 
+    if cookies_path:
+        ydl_opts['cookiefile'] = cookies_path
+
     try:
-        logger.info(f"Starting download for URL: {url}")
-        with YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-
             if not info:
-                raise Exception("Failed to extract video info")
-
-            filename = ydl.prepare_filename(info)
-            base, ext = os.path.splitext(filename)
-
-            # Convert to .wav if necessary
-            wav_file = f"{base}.wav"
-            if os.path.exists(wav_file):
-                safe_remove_file(filename)
-                return wav_file
-
-            return filename
-
+                raise Exception("yt-dlp failed to extract video info")
+            return temp_file
+    except yt_dlp.utils.DownloadError as e:
+        raise Exception(f"DownloadError: {e}")
     except Exception as e:
-        logger.error(f"Error downloading audio: {str(e)}", exc_info=True)
-        # Clean up partial downloads
-        for pattern in [f'temp_*{unique_id}*.*', f'temp_*{unique_id}*.*.*']:
-            for f in glob.glob(os.path.join(TEMP_DIR, pattern)):
-                safe_remove_file(f)
-        raise
-
+        raise Exception(f"Unexpected error: {e}")
 
 def convert_to_wav(input_file):
     """Convert any audio file to WAV 16kHz mono"""
