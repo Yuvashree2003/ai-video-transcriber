@@ -62,11 +62,10 @@ def safe_remove_file(filepath, max_retries=3, delay=0.1):
             time.sleep(delay)
     return False
 
-def download_audio(url, cookies_path=None):
-    import yt_dlp
+def download_audio(url):
     import uuid
 
-    temp_file = f"temp_audio_{uuid.uuid4()}.mp3"
+    temp_file = os.path.join(TEMP_DIR, f"temp_audio_{uuid.uuid4()}.mp3")
 
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -80,19 +79,25 @@ def download_audio(url, cookies_path=None):
         }],
     }
 
-    if cookies_path:
-        ydl_opts['cookiefile'] = cookies_path
-
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             if not info:
                 raise Exception("yt-dlp failed to extract video info")
             return temp_file
+
     except yt_dlp.utils.DownloadError as e:
+        # Catch Instagram/Facebook public-content failures
+        msg = str(e).lower()
+        if "login required" in msg or "requested content is not available" in msg or "age-restricted" in msg:
+            raise Exception(
+                "Cannot download this content. Only publicly accessible videos/reels are supported."
+            )
         raise Exception(f"DownloadError: {e}")
+
     except Exception as e:
         raise Exception(f"Unexpected error: {e}")
+
 
 def convert_to_wav(input_file):
     """Convert any audio file to WAV 16kHz mono"""
