@@ -12,6 +12,10 @@ import string
 import logging
 import glob
 import yt_dlp
+from pathlib import Path
+
+# Make sure your cookie file is uploaded to your project or accessible in the same directory
+COOKIE_FILE = "cookies.txt"  # Replace with your cookie file path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -54,59 +58,52 @@ import os, uuid, tempfile, yt_dlp, logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def download_audio(url: str, cookies_file: str = None) -> str:
+def download_audio(url: str) -> str:
     """
-    Downloads audio from YouTube, Instagram, or Facebook and returns the path to the WAV file.
-    Handles YouTube Shorts and normal videos, including 403 errors using cookies and User-Agent.
-
-    :param url: Media URL
-    :param cookies_file: Optional path to a cookies.txt file for restricted videos
-    :return: Path to downloaded WAV file
+    Downloads audio from YouTube, Instagram, or Facebook URL using yt-dlp.
+    Handles login-required or rate-limited errors gracefully.
+    Returns path to downloaded WAV file.
     """
-    temp_dir = tempfile.gettempdir()
-    audio_filename = os.path.join(temp_dir, f"temp_audio_{os.urandom(8).hex()}.wav")
-
-    ydl_opts = {
-        'format': 'bestaudio[ext=m4a]/bestaudio/best',
-        'outtmpl': os.path.join(temp_dir, 'temp_audio_%(id)s.%(ext)s'),
-        'noplaylist': True,
-        'quiet': True,
-        'no_warnings': True,
-        'ignoreerrors': False,
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'wav',
-            'preferredquality': '192',
-        }],
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-        'youtube_skip_dash_manifest': True,  # Important for Shorts
-    }
-
-    if cookies_file:
-        ydl_opts['cookiefile'] = cookies_file
-
     try:
-        logger.info(f"Starting download for URL: {url}")
+        file_name = url.split("/")[-1].split("?")[0] + "_" + get_random_string(6) + ".wav"
+        audio_path = str(Path(TEMP_DIR) / file_name)
+
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": audio_path,
+            "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "wav"}],
+            "quiet": True,
+            "no_warnings": True,
+        }
+
+        # Use cookies only if file exists
+        if Path(COOKIE_FILE).exists():
+            ydl_opts["cookiefile"] = COOKIE_FILE
+            logger.info("✅ Using cookies.txt for authenticated download.")
+        else:
+            logger.info("⚠️ cookies.txt not found — only public media can be downloaded.")
+
+        logger.info(f"🎧 Starting download for: {url}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            if not info:
-                raise Exception("Failed to extract media info.")
 
-        # Find the WAV file created by postprocessor
-        temp_files = [f for f in os.listdir(temp_dir) if f.startswith('temp_audio_') and f.endswith('.wav')]
-        if not temp_files:
-            raise Exception("Audio file not created after download.")
-        
-        downloaded_audio = os.path.join(temp_dir, temp_files[0])
-        logger.info(f"Downloaded audio saved to: {downloaded_audio}")
-        return downloaded_audio
+        logger.info(f"✅ Downloaded audio to: {audio_path}")
+        return audio_path
 
     except yt_dlp.utils.DownloadError as e:
-        logger.error(f"Error downloading audio: {e}")
-        raise Exception(f"❌ Error: Unable to download this media. Ensure it’s a *public* YouTube, Instagram, or Facebook post. ({str(e)})")
+        error_message = str(e).lower()
+
+        if "login required" in error_message or "sign in" in error_message:
+            raise Exception("⚠️ This Instagram/Facebook post requires login. Please ensure it's public or upload cookies.txt.")
+        elif "rate-limit" in error_message:
+            raise Exception("🚫 Rate limit reached. Please try again after a few minutes.")
+        elif "private" in error_message or "not available" in error_message:
+            raise Exception("🔒 This media is private or unavailable. Try a public link instead.")
+        else:
+            raise Exception(f"❌ Unable to download this media: {str(e)}")
+
     except Exception as e:
-        logger.error(f"Transcription download error: {e}")
-        raise Exception(f"❌ Error: {str(e)}")
+        raise Exception(f"❌ Unexpected error while downloading: {str(e)}")
 
 @app.route("/")
 def index():
