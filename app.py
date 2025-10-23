@@ -13,6 +13,13 @@ import logging
 import glob
 import yt_dlp
 from pathlib import Path
+from secrets import token_hex
+
+def get_random_string(n=6):
+    return token_hex(n // 2)
+
+TEMP_DIR = Path(os.getenv("TEMP", "transcriber_temp"))
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 # Make sure your cookie file is uploaded to your project or accessible in the same directory
 COOKIE_FILE = "cookies.txt"  # Replace with your cookie file path
@@ -65,56 +72,54 @@ def download_audio(url: str) -> str:
     Returns path to downloaded WAV file.
     """
     try:
-        file_name = url.split("/")[-1].split("?")[0] + "_" + get_random_string(6) + ".wav"
-        audio_path = str(Path(TEMP_DIR) / file_name)
+        base_name = url.split("/")[-1].split("?")[0] + "_" + get_random_string(6)
+        output_template = str(TEMP_DIR / f"{base_name}.%(ext)s")
+        wav_path = str(TEMP_DIR / f"{base_name}.wav")
 
-        # Default download options
         ydl_opts = {
             "format": "bestaudio/best",
-            "outtmpl": audio_path,
-            "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "wav"}],
+            "outtmpl": output_template,
             "quiet": True,
             "no_warnings": True,
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "wav",
+                    "preferredquality": "192",
+                }
+            ],
         }
 
-        # Automatically pick cookie file based on URL
-        if "youtube.com" in url or "youtu.be" in url:
-            cookie_path = Path("youtube_cookies.json")
-        elif "instagram.com" in url:
+        # Pick cookies automatically
+        if "instagram.com" in url:
             cookie_path = Path("instagram_cookies.json")
-        elif "facebook.com" in url:
-            cookie_path = Path("facebook_cookies.json")  # optional, if you add later
+        elif "youtube.com" in url or "youtu.be" in url:
+            cookie_path = Path("youtube_cookies.json")
         else:
             cookie_path = None
 
-        # Add cookie file if available
         if cookie_path and cookie_path.exists():
             ydl_opts["cookiefile"] = str(cookie_path)
-            logger.info(f"✅ Using cookies from {cookie_path.name} for authenticated download.")
+            print(f"✅ Using cookies: {cookie_path.name}")
         else:
-            logger.info("⚠️ No valid cookie file found — downloading only public media.")
+            print("⚠️ No cookie file found — downloading only public media.")
 
-        logger.info(f"🎧 Starting download for: {url}")
-
+        # Run download
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
 
-        logger.info(f"✅ Downloaded audio to: {audio_path}")
-        return audio_path
+        # Verify output
+        if not Path(wav_path).exists():
+            raise FileNotFoundError(f"WAV file not found: {wav_path}")
+
+        print(f"✅ Downloaded: {wav_path}")
+        return wav_path
 
     except yt_dlp.utils.DownloadError as e:
-        error_message = str(e).lower()
-        if "login required" in error_message or "sign in" in error_message:
-            raise Exception("⚠️ This post requires login. Please ensure it’s public or upload valid cookies.")
-        elif "rate-limit" in error_message:
-            raise Exception("🚫 Rate limit reached. Please try again after a few minutes.")
-        elif "private" in error_message or "not available" in error_message:
-            raise Exception("🔒 This media is private or unavailable. Try a public link instead.")
-        else:
-            raise Exception(f"❌ Unable to download this media: {str(e)}")
+        raise Exception(f"Download failed: {str(e)}")
 
     except Exception as e:
-        raise Exception(f"❌ Unexpected error while downloading: {str(e)}")
+        raise Exception(f"Unexpected error: {str(e)}")
 
 @app.route("/")
 def index():
