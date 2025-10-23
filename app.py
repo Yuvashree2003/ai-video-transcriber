@@ -61,13 +61,14 @@ logger = logging.getLogger(__name__)
 def download_audio(url: str) -> str:
     """
     Downloads audio from YouTube, Instagram, or Facebook URL using yt-dlp.
-    Handles login-required or rate-limited errors gracefully.
+    Supports cookies for login-required content.
     Returns path to downloaded WAV file.
     """
     try:
         file_name = url.split("/")[-1].split("?")[0] + "_" + get_random_string(6) + ".wav"
         audio_path = str(Path(TEMP_DIR) / file_name)
 
+        # Default download options
         ydl_opts = {
             "format": "bestaudio/best",
             "outtmpl": audio_path,
@@ -76,14 +77,25 @@ def download_audio(url: str) -> str:
             "no_warnings": True,
         }
 
-        # Use cookies only if file exists
-        if Path(COOKIE_FILE).exists():
-            ydl_opts["cookiefile"] = COOKIE_FILE
-            logger.info("✅ Using cookies.txt for authenticated download.")
+        # Automatically pick cookie file based on URL
+        if "youtube.com" in url or "youtu.be" in url:
+            cookie_path = Path("youtube_cookies.json")
+        elif "instagram.com" in url:
+            cookie_path = Path("instagram_cookies.json")
+        elif "facebook.com" in url:
+            cookie_path = Path("facebook_cookies.json")  # optional, if you add later
         else:
-            logger.info("⚠️ cookies.txt not found — only public media can be downloaded.")
+            cookie_path = None
+
+        # Add cookie file if available
+        if cookie_path and cookie_path.exists():
+            ydl_opts["cookiefile"] = str(cookie_path)
+            logger.info(f"✅ Using cookies from {cookie_path.name} for authenticated download.")
+        else:
+            logger.info("⚠️ No valid cookie file found — downloading only public media.")
 
         logger.info(f"🎧 Starting download for: {url}")
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
 
@@ -92,9 +104,8 @@ def download_audio(url: str) -> str:
 
     except yt_dlp.utils.DownloadError as e:
         error_message = str(e).lower()
-
         if "login required" in error_message or "sign in" in error_message:
-            raise Exception("⚠️ This Instagram/Facebook post requires login. Please ensure it's public or upload cookies.txt.")
+            raise Exception("⚠️ This post requires login. Please ensure it’s public or upload valid cookies.")
         elif "rate-limit" in error_message:
             raise Exception("🚫 Rate limit reached. Please try again after a few minutes.")
         elif "private" in error_message or "not available" in error_message:
