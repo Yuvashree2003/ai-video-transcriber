@@ -14,11 +14,14 @@ import glob
 import yt_dlp
 from pathlib import Path
 from secrets import token_hex
+import tempfile
 
 def get_random_string(n=6):
     return token_hex(n // 2)
 
-TEMP_DIR = Path(os.getenv("TEMP", "transcriber_temp"))
+import tempfile
+
+TEMP_DIR = Path(tempfile.gettempdir()) / "transcriber_temp"
 TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
 # Make sure your cookie file is uploaded to your project or accessible in the same directory
@@ -39,9 +42,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("transcriber")
 
-# Temporary directory
-TEMP_DIR = os.path.join(tempfile.gettempdir(), "transcriber_temp")
-os.makedirs(TEMP_DIR, exist_ok=True)
+
 
 def get_random_string(length=8):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
@@ -160,8 +161,9 @@ def transcribe():
         return jsonify({"error": str(e)}), 500
     finally:
         # Clean up
-        for f in glob.glob(os.path.join(TEMP_DIR, "*")):
+        for f in TEMP_DIR.glob("*"):
             safe_remove_file(f)
+
 
 # Simple login
 USERNAME, PASSWORD = "Jayashree", "Krishna@2025"
